@@ -64,12 +64,23 @@ class Process:
         
     
 class CPU:
-    def __init__(self, process_num, seed, lamb, bound, switch_time, alpha, rr_time_slice, algorithm):
+    def __init__(self, process_num, seed, lamb, bound, switch_time, alpha, rr_time_slice):
+        self.reset_vals = (process_num, seed, lamb, bound)
         rand = Rand48(seed, lamb, bound)
-        self.algorithm = algorithm
         self.processes = []
         self.switch_time = switch_time/2
         self.rr_time_slice = rr_time_slice
+        self.current_process = None
+        self.events_queue = []
+        heapify(self.events_queue)
+        self.process_queue = []
+        for i in range(process_num):
+            self.processes.append(Process(rand, lamb))
+            heappush(self.events_queue, (self.processes[i].arrival_time, i, "arrival"))
+            
+    def reset(self):
+        rand = Rand48(self.reset_vals[0], self.reset_vals[1], self.reset_vals[2])
+        self.processes = []
         self.current_process = None
         self.events_queue = []
         heapify(self.events_queue)
@@ -104,7 +115,8 @@ class CPU:
                 print("time {}ms: Process {} {} [Q: {}]"\
                     .format(int(current_time), proc_name_array[process_num], event_string, self.queue_string()))
             
-    def run(self):
+    def run_fcfs(self):
+        self.algorithm = "FCFS"
         self.print_event(0, None, "Simulator started for {}".format(self.algorithm))
         while(len(self.events_queue) != 0):
             current_time, process_num, event_type = heappop(self.events_queue)
@@ -156,9 +168,11 @@ if __name__ == "__main__":
     switch_time = int(sys.argv[5])
     alpha = float(sys.argv[6])
     rr_time_slice = int(sys.argv[7])
-    cpu = CPU(process_num, seed, lamb, bound, switch_time, alpha, rr_time_slice, "FCFS")
+    cpu = CPU(process_num, seed, lamb, bound, switch_time, alpha, rr_time_slice)
     cpu.print()
     print()
-    cpu.run()
+    cpu.run_fcfs()
+    cpu.reset()
+    
     
     
