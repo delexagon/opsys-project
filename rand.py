@@ -93,6 +93,7 @@ class CPU:
         rand = Rand48(self.reset_vals[0], self.reset_vals[1], self.reset_vals[2])
         self.processes = []
         # Probably necessary to keep track of for preemption
+        # Note that this is an integer index of self.processes[], not an actual Process object
         self.current_process = None
         # Events are added to a heap, and popped out from it in temporal order
         # TODO: Currently, 'tiebreakers' for events are not implemented
@@ -144,6 +145,8 @@ class CPU:
     def run_fcfs(self):
         """Runs the FCFS algorithm and prints results"""
         self.algorithm = "FCFS"
+        # Syntax of print_event: Time of event, the integer of the process related to the event (None if not applicable), string of what needs to be printed for the event.
+        # Things like the current queue and the tau of the process are automatically printed.
         self.print_event(0, None, "Simulator started for {}".format(self.algorithm))
         while(len(self.events_queue) != 0):
             # Take in the next event to be processed
