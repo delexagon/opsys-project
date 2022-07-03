@@ -66,17 +66,9 @@ class Process:
 class CPU:
     def __init__(self, process_num, seed, lamb, bound, switch_time, alpha, rr_time_slice):
         self.reset_vals = (process_num, seed, lamb, bound)
-        rand = Rand48(seed, lamb, bound)
-        self.processes = []
         self.switch_time = switch_time/2
         self.rr_time_slice = rr_time_slice
-        self.current_process = None
-        self.events_queue = []
-        heapify(self.events_queue)
-        self.process_queue = []
-        for i in range(process_num):
-            self.processes.append(Process(rand, lamb))
-            heappush(self.events_queue, (self.processes[i].arrival_time, i, "arrival"))
+        self.reset()
             
     def reset(self):
         rand = Rand48(self.reset_vals[0], self.reset_vals[1], self.reset_vals[2])
@@ -142,7 +134,8 @@ class CPU:
                     bursts_left = self.processes[process_num].get_remaining_bursts()
                     self.print_event(current_time, process_num, "completed a CPU burst; {} burst{} to go".format(bursts_left, "" if bursts_left == 1 else "s"))
                     io_burst_time = self.processes[self.current_process].start_burst(current_time)
-                    self.print_event(current_time, process_num, "switching out of CPU; will block on I/O until time {}ms".format(int(current_time+io_burst_time+self.switch_time)))
+                    self.print_event(current_time, process_num, "switching out of CPU; will block on I/O until time {}ms"\
+                        .format(int(current_time+io_burst_time+self.switch_time)))
                     heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, self.current_process, "io_finish"))
                 else:
                     self.print_event(current_time, process_num, "terminated")
@@ -155,6 +148,15 @@ class CPU:
                     process_num = self.process_queue.pop(0)
                     heappush(self.events_queue, (current_time+self.switch_time, process_num, "switch_in"))
         self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm))
+    
+    def run_sjf(self):
+        return
+    
+    def run_srt(self):
+        return
+    
+    def run_rr(self):
+        return
     
     
 if __name__ == "__main__":
@@ -172,7 +174,13 @@ if __name__ == "__main__":
     cpu.print()
     print()
     cpu.run_fcfs()
+    print()
     cpu.reset()
-    
-    
+    cpu.run_sjf()
+    print()
+    cpu.reset()
+    cpu.run_srt()
+    print()
+    cpu.reset()
+    cpu.run_rr() 
     
