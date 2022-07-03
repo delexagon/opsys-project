@@ -54,7 +54,8 @@ class Process:
         return False
     
     def print(self):
-        print("arrival time {}ms; tau {}ms; {} CPU bursts:".format(self.arrival_time, self.tau, len(self.bursts)//2+1))
+        print("arrival time {}ms; tau {}ms; {} CPU burst{}:"\
+            .format(self.arrival_time, self.tau, len(self.bursts)//2+1, "" if len(self.bursts)//2+1 == 1 else "s"))
         for i in range(0, len(self.bursts)-1, 2):
             print("--> CPU burst {}ms --> I/O burst {}ms".format(self.bursts[i], self.bursts[i+1]))
         print("--> CPU burst {}ms".format(self.bursts[-1]))
@@ -94,14 +95,14 @@ class CPU:
         proc_name_array = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         if(process_num == None or process_num == -1):
             print("time {}ms: {} [Q: {}]"\
-            .format(int(current_time), event_string, self.queue_string()))
+                .format(int(current_time), event_string, self.queue_string()))
         else:
             if(self.algorithm == "SRT" or self.algorithm == "SJF"):
                 print("time {}ms: Process {} (tau {}ms) {} [Q: {}]"\
-                .format(int(current_time), proc_name_array[process_num], int(processes[process_num].tau), event_string, self.queue_string()))
+                    .format(int(current_time), proc_name_array[process_num], int(processes[process_num].tau), event_string, self.queue_string()))
             else:
                 print("time {}ms: Process {} {} [Q: {}]"\
-                .format(int(current_time), proc_name_array[process_num], event_string, self.queue_string()))
+                    .format(int(current_time), proc_name_array[process_num], event_string, self.queue_string()))
             
     def run(self):
         self.print_event(0, None, "Simulator started for {}".format(self.algorithm))
@@ -127,9 +128,9 @@ class CPU:
                 terminated = self.processes[self.current_process].finish_burst()
                 if not terminated:
                     bursts_left = self.processes[process_num].get_remaining_bursts()
-                    self.print_event(current_time, process_num, "completed a CPU burst; {} bursts to go".format(self.processes[process_num].get_remaining_bursts()))
+                    self.print_event(current_time, process_num, "completed a CPU burst; {} burst{} to go".format(bursts_left, "" if bursts_left == 1 else "s"))
                     io_burst_time = self.processes[self.current_process].start_burst(current_time)
-                    self.print_event(current_time, process_num, "switching out of CPU; will block on I/O until time {}ms".format(int(current_time+io_burst_time)))
+                    self.print_event(current_time, process_num, "switching out of CPU; will block on I/O until time {}ms".format(int(current_time+io_burst_time+self.switch_time)))
                     heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, self.current_process, "io_finish"))
                 else:
                     self.print_event(current_time, process_num, "terminated")
