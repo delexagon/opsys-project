@@ -77,6 +77,7 @@ class Process:
         
     
 class CPU:
+
     def __init__(self, process_num, seed, lamb, bound, switch_time, alpha, rr_time_slice):
         """Initializes the CPU to default values"""
         # Variables needed to create the random number generator during reset
@@ -177,6 +178,8 @@ class CPU:
                     # Note that all plural words in print statements have to check whether they should have an 's' at the end
                     self.print_event(current_time, process_num, "completed a CPU burst; {} burst{} to go".format(bursts_left, "" if bursts_left == 1 else "s"))
                     io_burst_time = self.processes[self.current_process].start_burst(current_time)
+                    # Note the IO block only starts *after* the process is switched out of the CPU;
+                    # This is considered during the io_finish call
                     self.print_event(current_time, process_num, "switching out of CPU; will block on I/O until time {}ms"\
                         .format(int(current_time+io_burst_time+self.switch_time)))
                     heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, self.current_process, "io_finish"))
