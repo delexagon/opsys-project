@@ -2,6 +2,9 @@ import sys
 import math
 from heapq import heapify, heappush, heappop
 
+
+proc_name_array = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 class Rand48:
     """Emulates the rand48 family of functions in C"""
     
@@ -49,6 +52,10 @@ class Process:
     def start_burst(self, current_time):
         """Returns the time remaining in the current burst, cpu or io"""
         self.current_time = current_time
+        if len(self.bursts) <= self.current_burst:
+            print(len(self.bursts), file=sys.stderr)
+            print(self.current_burst, file=sys.stderr)
+            exit()
         return self.bursts[self.current_burst] - self.current_time_in_burst
         
     def stop_burst(self, current_time):
@@ -61,9 +68,11 @@ class Process:
         Note that this means that the CPU has to explicitly tell the process to progress."""
         self.current_time_in_burst = 0
         self.current_burst += 1
+        if self.current_burst == 135 and len(self.bursts) == 135:
+            print("ho", file=sys.stderr)
         if self.current_burst >= len(self.bursts):
-            return True
-        return False
+            return False
+        return self.bursts[self.current_burst-1]
     
     def print(self):
         """Prints a description of this process as per project specifications"""
@@ -85,6 +94,7 @@ class CPU:
         # Switching threads off and on are considered separate events,
         # so this time is halved
         self.switch_time = switch_time/2
+        self.alpha = alpha
         self.rr_time_slice = rr_time_slice
         self.reset()
             
@@ -107,37 +117,42 @@ class CPU:
             # First, the time at which the event occurs
             # Second, the process that the event affects
             # Third, the type of event which is occurring
-            heappush(self.events_queue, (self.processes[i].arrival_time, i, "arrival"))
+            heappush(self.events_queue, (self.processes[i].arrival_time, "d_arrival", i))
         
     def print(self):
         """Prints a description of all the processes present in this CPU as per project specifications"""
-        proc_name_array = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         for i in range(len(self.processes)):
             print("Process {}: ".format(proc_name_array[i]), end='')
             self.processes[i].print()
         print()
+        
+    def recalculate_tau(self, time, process, burst_time):
+        old_tau = self.processes[process].tau
+        new_tau = math.ceil(alpha*burst_time + (1-alpha) * old_tau)
+        self.processes[process].tau = new_tau
+        self.print_event(time, None, f"Recalculated tau for process {proc_name_array[process]}: old tau {old_tau}ms; new tau {new_tau}ms")
             
     def queue_string(self):
         """Returns a string representing the current state of the queue in this CPU"""
-        proc_name_array = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         if len(self.process_queue) == 0:
             return "empty"
         else:
             return ' '.join(map(lambda x : proc_name_array[x], self.process_queue))
             
     def print_event(self, current_time, process_num, event_string):
-        """Algorithm print statements all have a very similar format, so this will automatically add flavor text""" 
-        proc_name_array = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        """Algorithm print statements all have a very similar format, so this will automatically add flavor text"""
         if(process_num == None or process_num == -1):
             print("time {}ms: {} [Q: {}]"\
                 .format(int(current_time), event_string, self.queue_string()))
         else:
             if(self.algorithm == "SRT" or self.algorithm == "SJF"):
                 print("time {}ms: Process {} (tau {}ms) {} [Q: {}]"\
-                    .format(int(current_time), proc_name_array[process_num], int(processes[process_num].tau), event_string, self.queue_string()))
+                    .format(int(current_time), proc_name_array[process_num], int(self.processes[process_num].tau), event_string, self.queue_string()))
             else:
                 print("time {}ms: Process {} {} [Q: {}]"\
                     .format(int(current_time), proc_name_array[process_num], event_string, self.queue_string()))
+                    
+                    
             
     # The code here is meant to be fairly generalized; copy it over and start modifying it to fit the other algorithms.
     # A lot of code will be common between each algorithm; we can move these into their own functions.
@@ -151,52 +166,122 @@ class CPU:
         self.print_event(0, None, "Simulator started for {}".format(self.algorithm))
         while(len(self.events_queue) != 0):
             # Take in the next event to be processed
-            current_time, process_num, event_type = heappop(self.events_queue)
+            current_time, event_type, process_num  = heappop(self.events_queue)
             # Events that come in are handled based on what they are
-            if event_type == "arrival":
+            if event_type == "d_arrival":
                 self.process_queue.append(process_num)
                 self.print_event(current_time, process_num, "arrived; added to ready queue")
                 if self.current_process == None:
-                    heappush(self.events_queue, (current_time+self.switch_time, None, "switch_in"))
+                    heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", process_num))
             # Switching the current thread out and switching a new thread in are considered separate events;
             # this is to avoid complicated calculations beforehand and so that events arriving during switchout time will be noticed in the queue.
             elif event_type == "switch_out":
                 self.current_process = None
                 if len(self.process_queue) != 0:
-                    heappush(self.events_queue, (current_time+self.switch_time, None, "switch_in"))
+                    heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", process_num))
             # Note neither type of switching uses process_num, switching in draws from the start of the queue
-            elif event_type == "switch_in":
-                self.current_process = self.process_queue.pop(0)
-                cpu_burst_time = self.processes[self.current_process].start_burst(current_time)
-                self.print_event(current_time, self.current_process, "started using the CPU for {}ms burst".format(cpu_burst_time))
-                heappush(self.events_queue, (current_time+cpu_burst_time, self.current_process, "cpu_finish"))
-            elif event_type == "cpu_finish":
+            elif event_type == "b_switch_in":
+                if self.current_process == None:
+                    self.current_process = self.process_queue.pop(0)
+                    cpu_burst_time = self.processes[self.current_process].start_burst(current_time)
+                    self.print_event(current_time, self.current_process, "started using the CPU for {}ms burst".format(cpu_burst_time))
+                    heappush(self.events_queue, (current_time+cpu_burst_time, "a_cpu_finish", self.current_process))
+            elif event_type == "a_cpu_finish":
                 # This needs to be called to allow the process to move on
-                terminated = self.processes[self.current_process].finish_burst()
-                if not terminated:
+                running = self.processes[self.current_process].finish_burst()
+                if running:
                     bursts_left = self.processes[process_num].get_remaining_cpu_bursts()
                     # Note that all plural words in print statements have to check whether they should have an 's' at the end
                     self.print_event(current_time, process_num, "completed a CPU burst; {} burst{} to go".format(bursts_left, "" if bursts_left == 1 else "s"))
                     io_burst_time = self.processes[self.current_process].start_burst(current_time)
                     # Note the IO block only starts *after* the process is switched out of the CPU;
-                    # This is considered during the io_finish call
+                    # This is considered during the c_io_finish call
                     self.print_event(current_time, process_num, "switching out of CPU; will block on I/O until time {}ms"\
                         .format(int(current_time+io_burst_time+self.switch_time)))
-                    heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, self.current_process, "io_finish"))
+                    heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, "c_io_finish", self.current_process))
                 else:
                     self.print_event(current_time, process_num, "terminated")
-                heappush(self.events_queue, (current_time+self.switch_time, None, "switch_out"))
-            elif event_type == "io_finish":
+                heappush(self.events_queue, (current_time+self.switch_time, "switch_out", process_num))
+            elif event_type == "c_io_finish":
                 self.processes[process_num].finish_burst()
                 self.process_queue.append(process_num)
                 self.print_event(current_time, process_num, "completed I/O; added to ready queue")
                 if self.current_process == None:
-                    heappush(self.events_queue, (current_time+self.switch_time, None, "switch_in"))
+                    heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", process_num))
         self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm))
         print()
     
     def run_sjf(self):
-        return
+        """Runs the SJF algorithm and prints results"""
+        self.algorithm = "SJF"
+        self.print_event(0, None, "Simulator started for {}".format(self.algorithm))
+        while(len(self.events_queue) != 0):
+            current_time, event_type, process_num = heappop(self.events_queue)
+            if event_type == "d_arrival":
+                tau = self.processes[process_num].tau
+                added = False
+                for i in range(len(self.process_queue)):
+                    proctau = self.processes[self.process_queue[i]].tau
+                    if proctau > tau:
+                        self.process_queue.insert(i, process_num)
+                        added = True
+                        break
+                    if proctau == tau and process_num < self.process_queue[i]:
+                        self.process_queue.insert(i, process_num)
+                        added = True
+                        break
+                if not added:
+                    self.process_queue.append(process_num)
+                self.print_event(current_time, process_num, "arrived; added to ready queue")
+                if self.current_process == None:
+                    heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", process_num))
+            elif event_type == "switch_out":
+                self.current_process = None
+                if len(self.process_queue) != 0:
+                    heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", process_num))
+            elif event_type == "b_switch_in":
+                if self.current_process == None:
+                    self.current_process = self.process_queue.pop(0)
+                    cpu_burst_time = self.processes[self.current_process].start_burst(current_time)
+                    self.print_event(current_time, self.current_process, "started using the CPU for {}ms burst".format(cpu_burst_time))
+                    heappush(self.events_queue, (current_time+cpu_burst_time, "a_cpu_finish", self.current_process))
+            elif event_type == "a_cpu_finish":
+                running = self.processes[self.current_process].finish_burst()
+                if running:
+                    bursts_left = self.processes[process_num].get_remaining_cpu_bursts()
+                    self.print_event(current_time, process_num, "completed a CPU burst; {} burst{} to go".format(bursts_left, "" if bursts_left == 1 else "s"))
+                    self.recalculate_tau(current_time, process_num, running)
+                    io_burst_time = self.processes[self.current_process].start_burst(current_time)
+                    self.print_event(current_time, None, "Process {} switching out of CPU; will block on I/O until time {}ms"\
+                        .format(proc_name_array[process_num], int(current_time+io_burst_time+self.switch_time)))
+                    heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, "c_io_finish", self.current_process))
+                else:
+                    self.print_event(current_time, None, "Process {} terminated".format(proc_name_array[process_num]))
+                heappush(self.events_queue, (current_time+self.switch_time, "switch_out", process_num))
+            elif event_type == "c_io_finish":
+                running = self.processes[process_num].finish_burst()
+                if not running:
+                    print("what", file=sys.stderr)
+                    sys.exit()
+                tau = self.processes[process_num].tau
+                added = False
+                for i in range(len(self.process_queue)):
+                    proctau = self.processes[self.process_queue[i]].tau
+                    if proctau > tau:
+                        self.process_queue.insert(i, process_num)
+                        added = True
+                        break
+                    if proctau == tau and process_num < self.process_queue[i]:
+                        self.process_queue.insert(i, process_num)
+                        added = True
+                        break
+                if not added:
+                    self.process_queue.append(process_num)
+                self.print_event(current_time, process_num, "completed I/O; added to ready queue")
+                if self.current_process == None:
+                    heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", process_num))
+        self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm))
+        print()
     
     def run_srt(self):
         return
