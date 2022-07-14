@@ -68,8 +68,6 @@ class Process:
         Note that this means that the CPU has to explicitly tell the process to progress."""
         self.current_time_in_burst = 0
         self.current_burst += 1
-        if self.current_burst == 135 and len(self.bursts) == 135:
-            print("ho", file=sys.stderr)
         if self.current_burst >= len(self.bursts):
             return False
         return self.bursts[self.current_burst-1]
@@ -97,6 +95,10 @@ class CPU:
         self.alpha = alpha
         self.rr_time_slice = rr_time_slice
         self.reset()
+        self.total_burst_time = 0
+        self.num_bursts = 0
+        self.num_context_switches = 0
+        self.num_preemptions = 0
             
     def reset(self):
         """Reinitializes the CPU to default values"""
@@ -152,7 +154,23 @@ class CPU:
                 print("time {}ms: Process {} {} [Q: {}]"\
                     .format(int(current_time), proc_name_array[process_num], event_string, self.queue_string()))
                     
-                    
+    def output_file(self, current_time, algorithm):
+        """ Generalized function for outputting algorithm statistics """
+        f = open("simout.txt", "a")  # Append to file for consecutive calls
+        f.write(f"Algorithm {algorithm}\n")
+        avg_burst_time = self.total_burst_time/self.num_bursts
+        total_context_switch_time = self.num_context_switches * self.switch_time * 2
+        avg_wait_time = (current_time - (self.total_burst_time + total_context_switch_time))/self.num_bursts
+        avg_turnaround_time = (avg_burst_time+avg_wait_time +
+                               total_context_switch_time/self.num_context_switches)/self.num_bursts
+        utilization = self.total_burst_time/current_time * 100
+        f.write(f"-- average CPU burst time: {math.ceil(avg_burst_time)}.000 ms\n")
+        f.write(f"-- average wait time: {math.ceil(avg_wait_time)}.000 ms\n")
+        f.write(f"-- average turnaround time: {math.ceil(avg_turnaround_time)}.000 ms\n")
+        f.write(f"-- total number of context switches: {self.num_context_switches}\n")
+        f.write(f"-- total number of preemptions: {self.num_preemptions}\n")
+        f.write(f"-- CPU utilization: {math.ceil(utilization)}.000%\n")
+        f.close()
             
     # The code here is meant to be fairly generalized; copy it over and start modifying it to fit the other algorithms.
     # A lot of code will be common between each algorithm; we can move these into their own functions.
@@ -184,6 +202,9 @@ class CPU:
                 if self.current_process == None:
                     self.current_process = self.process_queue.pop(0)
                     cpu_burst_time = self.processes[self.current_process].start_burst(current_time)
+                    self.total_burst_time += cpu_burst_time
+                    self.num_bursts += 1
+                    self.num_context_switches += 1  # Only count context switches according to pdf pg. 8
                     self.print_event(current_time, self.current_process, "started using the CPU for {}ms burst".format(cpu_burst_time))
                     heappush(self.events_queue, (current_time+cpu_burst_time, "a_cpu_finish", self.current_process))
             elif event_type == "a_cpu_finish":
@@ -209,6 +230,7 @@ class CPU:
                 if self.current_process == None:
                     heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", process_num))
         self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm))
+        self.output_file(current_time, "FCFS")
         print()
     
     def run_sjf(self):
@@ -302,6 +324,9 @@ if __name__ == "__main__":
     alpha = float(sys.argv[6])
     rr_time_slice = int(sys.argv[7])
     cpu = CPU(process_num, seed, lamb, bound, switch_time, alpha, rr_time_slice)
+    f = open("simout.txt", "w")
+    f.truncate(0)
+    f.close()
     cpu.print()
     cpu.run_fcfs()
     cpu.reset()
