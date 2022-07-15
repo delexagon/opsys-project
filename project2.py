@@ -155,18 +155,19 @@ class CPU:
         else:
             return ' '.join(map(lambda x : proc_name_array[x], self.process_queue))
             
-    def print_event(self, current_time, process_num, event_string):
+    def print_event(self, current_time, process_num, event_string, to_print=False):
         """Algorithm print statements all have a very similar format, so this will automatically add flavor text"""
-        if(process_num == None or process_num == -1):
-            print("time {}ms: {} [Q: {}]"\
-                .format(int(current_time), event_string, self.queue_string()))
-        else:
-            if(self.algorithm == "SRT" or self.algorithm == "SJF"):
-                print("time {}ms: Process {} (tau {}ms) {} [Q: {}]"\
-                    .format(int(current_time), proc_name_array[process_num], int(self.processes[process_num].tau), event_string, self.queue_string()))
+        if current_time < 1000 or to_print:
+            if(process_num == None or process_num == -1):
+                print("time {}ms: {} [Q: {}]"\
+                    .format(int(current_time), event_string, self.queue_string()))
             else:
-                print("time {}ms: Process {} {} [Q: {}]"\
-                    .format(int(current_time), proc_name_array[process_num], event_string, self.queue_string()))
+                if(self.algorithm == "SRT" or self.algorithm == "SJF"):
+                    print("time {}ms: Process {} (tau {}ms) {} [Q: {}]"\
+                        .format(int(current_time), proc_name_array[process_num], int(self.processes[process_num].tau), event_string, self.queue_string()))
+                else:
+                    print("time {}ms: Process {} {} [Q: {}]"\
+                        .format(int(current_time), proc_name_array[process_num], event_string, self.queue_string()))
                     
     def output_file(self, current_time, algorithm):
         """ Generalized function for outputting algorithm statistics """
@@ -235,7 +236,7 @@ class CPU:
                         .format(int(current_time+io_burst_time+self.switch_time)))
                     heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, "c_io_finish", self.current_process))
                 else:
-                    self.print_event(current_time, process_num, "terminated")
+                    self.print_event(current_time, process_num, "terminated", True)
                 heappush(self.events_queue, (current_time+self.switch_time, "switch_out", process_num))
             elif event_type == "c_io_finish":
                 self.processes[process_num].finish_burst()
@@ -243,7 +244,7 @@ class CPU:
                 self.print_event(current_time, process_num, "completed I/O; added to ready queue")
                 if self.current_process == None:
                     heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", process_num))
-        self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm))
+        self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm), True)
         self.output_file(current_time, "FCFS")
     
     def run_sjf(self):
@@ -305,7 +306,7 @@ class CPU:
                             .format(proc_name_array[process_num], int(current_time+io_burst_time+self.switch_time)))
                         heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, "c_io_finish", self.current_process))
                     else:
-                        self.print_event(current_time, None, "Process {} terminated".format(proc_name_array[process_num]))
+                        self.print_event(current_time, None, "Process {} terminated".format(proc_name_array[process_num]), True)
                     heappush(self.events_queue, (current_time+self.switch_time, "switch_out", process_num))
                     switching_out = True
             elif event_type == "c_io_finish":
@@ -338,7 +339,7 @@ class CPU:
                     heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", new_process))
                     self.lock = True
                 last_resolved = current_time
-        self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm))
+        self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm), True)
     
     def run_srt(self):
         """Runs the SRT algorithm and prints results"""
@@ -422,7 +423,7 @@ class CPU:
                                 .format(proc_name_array[process_num], int(current_time+io_burst_time+self.switch_time)))
                             heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, "c_io_finish", self.current_process))
                         else:
-                            self.print_event(current_time, None, "Process {} terminated".format(proc_name_array[process_num]))
+                            self.print_event(current_time, None, "Process {} terminated".format(proc_name_array[process_num]), True)
                         heappush(self.events_queue, (current_time+self.switch_time, "switch_out", process_num))
                         switching_out = True
             elif event_type == "c_io_finish":
@@ -477,7 +478,7 @@ class CPU:
                     heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", new_process))
                     self.lock = True
                 last_resolved = current_time
-        self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm))
+        self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm), True)
     
     def run_rr(self):
         """Runs the RR algorithm and prints results"""
@@ -543,7 +544,7 @@ class CPU:
                             .format(proc_name_array[process_num], int(current_time+io_burst_time+self.switch_time)))
                         heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, "c_io_finish", self.current_process))
                     else:
-                        self.print_event(current_time, None, "Process {} terminated".format(proc_name_array[process_num]))
+                        self.print_event(current_time, None, "Process {} terminated".format(proc_name_array[process_num]), True)
                     heappush(self.events_queue, (current_time+self.switch_time, "ba_switch_out", -1))
                     switching_out = True
             elif event_type == "c_io_finish":
@@ -568,7 +569,7 @@ class CPU:
                     new_process = self.process_queue.pop(0)
                     heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", new_process))
                     self.lock = True
-        self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm))
+        self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm), True)
     
     
 if __name__ == "__main__":
