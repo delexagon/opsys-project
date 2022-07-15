@@ -223,7 +223,7 @@ class CPU:
             elif event_type == "a_cpu_finish":
                 # This needs to be called to allow the process to move on
                 running = self.processes[self.current_process].finish_burst()
-                self.total_turnaround_time += current_time - self.processes[process_num].time_added - self.switch_time  # Used for calculating stats
+                self.total_turnaround_time += current_time - self.processes[process_num].time_added + self.switch_time   # Used for calculating stats
                 if running:
                     bursts_left = self.processes[process_num].get_remaining_cpu_bursts()
                     # Note that all plural words in print statements have to check whether they should have an 's' at the end
