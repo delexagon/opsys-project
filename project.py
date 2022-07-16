@@ -40,9 +40,13 @@ class Process:
         self.current_burst = 0
         self.current_time_in_burst = 0
         self.time_added = 0
+        self.original_arrival_time = 0
+        self.total_cpu_burst_time = 0
         for burst in range(cpu_bursts*2-1):
             if burst % 2 == 0:
-                self.bursts.append(math.ceil(rand.next_exp()))
+                val = math.ceil(rand.next_exp())
+                self.bursts.append(val)
+                self.total_cpu_burst_time += val
             else:
                 self.bursts.append(10*math.ceil(rand.next_exp()))
                 
@@ -127,6 +131,7 @@ class CPU:
         self.num_preemptions = 0
         self.total_wait_time = 0
         self.total_turnaround_time = 0
+        self.total_cpu_burst_time = 0
         rand = Rand48(self.reset_vals[0], self.reset_vals[1], self.reset_vals[2])
         self.processes = []
         self.lock = False
@@ -140,6 +145,7 @@ class CPU:
         for i in range(process_num):
             # Processes generate themselves using the random number generator
             self.processes.append(Process(rand, lamb))
+            self.total_cpu_burst_time += self.processes[i].total_cpu_burst_time
             # Events have a particular syntax, a tuple of three parts:
             # First, the time at which the event occurs
             # Second, the process that the event affects
@@ -190,11 +196,11 @@ class CPU:
         """ Generalized function for outputting algorithm statistics """
         f = open("simout.txt", "a")  # Append to file for consecutive calls
         f.write(f"Algorithm {algorithm}\n")
-        avg_burst_time = self.total_burst_time / self.num_bursts
+        avg_burst_time = self.total_cpu_burst_time / self.num_bursts
         total_context_switch_time = self.num_context_switches * self.switch_time * 2
         avg_wait_time = self.total_wait_time / self.num_bursts
         avg_turnaround_time = self.total_turnaround_time / self.num_bursts
-        utilization = self.total_burst_time / current_time * 100
+        utilization = self.total_cpu_burst_time / current_time * 100
         f.write(f"-- average CPU burst time: {self.decimal_ceil(avg_burst_time)} ms\n")
         f.write(f"-- average wait time: {self.decimal_ceil(avg_wait_time)} ms\n")
         f.write(f"-- average turnaround time: {self.decimal_ceil(avg_turnaround_time)} ms\n")
@@ -381,7 +387,7 @@ class CPU:
         while(len(self.events_queue) != 0):
             current_time, event_type, process_num = heappop(self.events_queue)
             if event_type == "d_arrival":
-                self.processes[process_num].time_added = current_time
+                self.processes[process_num].original_arrival_time = current_time
                 tau = self.processes[process_num].tau - self.processes[process_num].current_time_in_burst
                 added = False
                 for i in range(len(self.process_queue)):
@@ -396,9 +402,11 @@ class CPU:
                         break
                 if not added:
                     self.process_queue.append(process_num)
+                self.processes[process_num].time_added = current_time
                 self.print_event(current_time, process_num, "arrived; added to ready queue")
                 if self.current_process == None:
                     new_process = self.process_queue.pop(0)
+                    self.total_wait_time += current_time - self.processes[new_process].time_added
                     heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", new_process))
                     self.lock = True
             elif event_type == "switch_out":
@@ -407,14 +415,13 @@ class CPU:
                 self.current_process = None
                 if (not self.lock) and len(self.process_queue) != 0:
                     new_process = self.process_queue.pop(0)
+                    self.total_wait_time += current_time - self.processes[new_process].time_added
                     heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", new_process))
                     self.lock = True
             elif event_type == "b_switch_in":
                 if self.current_process == None:
                     self.lock = True
                     self.current_process = process_num
-                    self.total_wait_time += current_time - self.processes[
-                        self.current_process].time_added - self.switch_time
                     cpu_burst_time = self.processes[self.current_process].start_burst(current_time)
                     cpu_original_burst_time = self.processes[self.current_process].total_burst_time()
                     if cpu_burst_time == cpu_original_burst_time:
@@ -425,6 +432,7 @@ class CPU:
                     self.total_burst_time += cpu_burst_time
                     self.num_context_switches += 1
                     if len(self.process_queue) > 0 and self.processes[process_num].tau - self.processes[process_num].current_time_in_burst > self.processes[self.process_queue[0]].tau - self.processes[self.process_queue[0]].current_time_in_burst:
+                        self.num_preemptions += 1
                         self.print_event(current_time, self.process_queue[0], "will preempt {}".format(proc_name_array[process_num]))
                         tau = self.processes[process_num].tau
                         added = False
@@ -440,6 +448,7 @@ class CPU:
                                 break
                         if not added:
                             self.process_queue.append(process_num)
+                        self.processes[process_num].time_added = current_time + self.switch_time
                         heappush(self.events_queue, (current_time+self.switch_time, "switch_out", self.current_process))
                         switching_out = True
                     else:
@@ -451,7 +460,7 @@ class CPU:
                 if not switching_out:
                     if self.current_process == process_num and self.processes[self.current_process].check_correct_time(current_time):
                         self.total_turnaround_time += current_time - self.processes[
-                            process_num].time_added + self.switch_time
+                            process_num].original_arrival_time + self.switch_time
                         running = self.processes[self.current_process].finish_burst()
                         if running:
                             bursts_left = self.processes[process_num].get_remaining_cpu_bursts()
@@ -467,7 +476,7 @@ class CPU:
                         switching_out = True
             elif event_type == "c_io_finish":
                 running = self.processes[process_num].finish_burst()
-                self.processes[process_num].time_added = current_time
+                self.processes[process_num].original_arrival_time = current_time
                 if not running:
                     print("Error: Process should not end on IO burst", file=sys.stderr)
                     sys.exit()
@@ -485,6 +494,7 @@ class CPU:
                         break
                 if not added:
                     self.process_queue.append(process_num)
+                self.processes[process_num].time_added = current_time
                 if self.current_process != None and not switching_out and tau < self.processes[self.current_process].remaining_time_estimate(current_time):
                     printed = True
                     old_process = self.current_process
@@ -505,6 +515,7 @@ class CPU:
                             break
                     if not added:
                         self.process_queue.append(old_process)
+                    self.processes[old_process].time_added = current_time + self.switch_time
                     heappush(self.events_queue, (current_time+self.switch_time, "switch_out", self.current_process))
                     switching_out = True
                 else:
@@ -516,6 +527,7 @@ class CPU:
                 # adding any one of them into the queue
                 if last_resolved != current_time:
                     new_process = self.process_queue.pop(0)
+                    self.total_wait_time += current_time - self.processes[new_process].time_added
                     heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", new_process))
                     self.lock = True
                 last_resolved = current_time
