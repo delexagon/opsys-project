@@ -543,12 +543,15 @@ class CPU:
         while(len(self.events_queue) != 0):
             current_time, event_type, process_num = heappop(self.events_queue)
             if event_type == "d_arrival":
+                self.processes[process_num].original_arrival_time = current_time
                 self.process_queue.append(process_num)
                 self.print_event(current_time, process_num, "arrived; added to ready queue")
                 if self.current_process == None:
                     new_process = self.process_queue.pop(0)
+                    self.total_wait_time += current_time - self.processes[new_process].time_added
                     heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", new_process))
                     self.lock = True
+                self.processes[process_num].time_added = current_time
             elif event_type == "ba_switch_out":
                 if process_num != -1:
                     self.process_queue.append(process_num)
@@ -558,6 +561,7 @@ class CPU:
                 heappush(self.events_queue, (current_time, "zz_resolve_switch_out_append", new_process))
             elif event_type == "b_switch_in":
                 if self.current_process == None:
+                    self.num_context_switches += 1
                     self.lock = True
                     self.current_process = process_num
                     cpu_burst_time = self.processes[self.current_process].start_burst(current_time)
@@ -575,6 +579,7 @@ class CPU:
                     sys.exit()
             elif event_type == "ba_rr_time_expired":
                 if len(self.process_queue) > 0:
+                    self.num_preemptions += 1
                     old_process = self.current_process
                     time_remaining = self.processes[old_process].stop_burst(current_time)
                     self.print_event(current_time, None, "Time slice expired; process {} preempted with {}ms remaining".format(proc_name_array[self.current_process], int(time_remaining)))
@@ -623,6 +628,7 @@ class CPU:
                     new_process = self.process_queue.pop(0)
                     heappush(self.events_queue, (current_time+self.switch_time, "b_switch_in", new_process))
                     self.lock = True
+                    self.processes[process_num].time_added = current_time + self.switch_time
         self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm), True)
     
     
