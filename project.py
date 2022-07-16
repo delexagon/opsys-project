@@ -568,6 +568,7 @@ class CPU:
                     cpu_original_burst_time = self.processes[self.current_process].total_burst_time()
                     if cpu_burst_time == cpu_original_burst_time:
                         self.print_event(current_time, self.current_process, "started using the CPU for {}ms burst".format(cpu_burst_time))
+                        self.num_bursts += 1
                     else:
                         self.print_event(current_time, self.current_process, "started using the CPU for remaining {}ms of {}ms burst".format(int(cpu_burst_time), cpu_original_burst_time))
                     if cpu_burst_time <= self.rr_time_slice:
@@ -595,6 +596,8 @@ class CPU:
             elif event_type == "a_cpu_finish":
                 if not switching_out:
                     running = self.processes[self.current_process].finish_burst()
+                    self.total_turnaround_time += current_time - self.processes[
+                        process_num].original_arrival_time + self.switch_time
                     if running:
                         bursts_left = self.processes[process_num].get_remaining_cpu_bursts()
                         self.print_event(current_time, process_num, "completed a CPU burst; {} burst{} to go".format(bursts_left, "" if bursts_left == 1 else "s"))
@@ -604,9 +607,11 @@ class CPU:
                         heappush(self.events_queue, (current_time+io_burst_time+self.switch_time, "c_io_finish", self.current_process))
                     else:
                         self.print_event(current_time, None, "Process {} terminated".format(proc_name_array[process_num]), True)
+                    self.processes[process_num].time_added = current_time
                     heappush(self.events_queue, (current_time+self.switch_time, "ba_switch_out", -1))
                     switching_out = True
             elif event_type == "c_io_finish":
+                self.processes[process_num].original_arrival_time = current_time
                 running = self.processes[process_num].finish_burst()
                 if not running:
                     print("Error: Process should not end on IO burst", file=sys.stderr)
@@ -630,6 +635,7 @@ class CPU:
                     self.lock = True
                     self.processes[process_num].time_added = current_time + self.switch_time
         self.print_event(current_time, None, "Simulator ended for {}".format(self.algorithm), True)
+        self.output_file(current_time, "RR")
     
     
 if __name__ == "__main__":
